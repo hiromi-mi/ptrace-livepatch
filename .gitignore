@@ -1,0 +1,11 @@
+core.*
+*.swp
+lib
+*.s
+lib.a
+*.o
+*.so
+hoge
+rewrite
+lib_musl
+ptrace
