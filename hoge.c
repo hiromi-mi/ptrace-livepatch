@@ -10,12 +10,13 @@ static int func2() __attribute__((noinline,noclone));
 static int func2() {
    //printf("This is func2: arg c*2 is: %d\n", c*2);
    puts("func2");
+   system("echo");
    return 2000;
 }
 
 int main()
 {
-  printf("func2: %p\n",func2);
+//  printf("func2: %p\n",func2);
   char *x = "hello, world! My name is hiromi_mi.";
         long long n = 12;
         while (1) {

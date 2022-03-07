@@ -9,3 +9,5 @@ hoge
 rewrite
 lib_musl
 ptrace
+log.log
+*_data.txt

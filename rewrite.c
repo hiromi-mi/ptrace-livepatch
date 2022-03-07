@@ -1,5 +1,6 @@
 // http://0xcc.net/blog/archives/000077.html
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -16,6 +17,7 @@
 
 // file を読み込む先のアドレス
 const long long load_addr = 0x555555520000;
+const long long base_addr = 0x555555554000;
 
 int set_data(pid_t target_pid, void* addr, void* to);
 int set_data_2(pid_t target_pid, void* addr, char* to, size_t len);
@@ -53,11 +55,25 @@ int read_file(pid_t target_pid, const char* filename) {
    return 0;
 }
 
-int rewrite_got(pid_t target_pid) {
+int rewrite_got(pid_t target_pid, const char* reloc) {
    // 0x555555557fc0: puts@got.plt
    
-   void* raddr = (void*)ptrace(PTRACE_PEEKDATA, target_pid, (void*)0x555555557fc0, NULL);
-   set_data(target_pid, 0x555555523fd0, raddr);
+   /*
+   void* raddr = (void*)ptrace(PTRACE_PEEKDATA, target_pid, (void*)(0x555555554000 + 0x3fc0), NULL);
+   set_data(target_pid, load_addr + 0x3fd0, raddr);
+   */
+
+   FILE* fp = fopen(reloc, "r");
+   assert(fp != NULL);
+
+   size_t before, after;
+   while (!feof(fp)) {
+      fscanf(fp, "%lx %lx\n", &before, &after);
+      //printf("%lx %lx\n", before, after);
+      void* raddr = (void*)ptrace(PTRACE_PEEKDATA, target_pid, (void*)(0x555555554000 + before), NULL);
+      set_data(target_pid, load_addr + after, raddr);
+   }
+   fclose(fp);
 }
 
 int set_data_2(pid_t target_pid, void* addr, char* to, size_t len) {
@@ -170,7 +186,8 @@ void* target_alloc(pid_t target_pid, long long size) {
 int rewrite_func(pid_t target_pid,void* from_addr, void* to_addr) {
    int jmp_relative = (long long)to_addr - (long long)from_addr  -5;
    char code[8];
-   code[0] = 0xe8;
+   //code[0] = 0xe8;
+   code[0] = 0xe9;
    //printf("jmp_relative: %d\n", jmp_relative);
    memcpy(code+1, &jmp_relative, sizeof(int));
       code[7] = 0x90;
@@ -186,8 +203,8 @@ int rewrite_func(pid_t target_pid,void* from_addr, void* to_addr) {
 
 int main(int argc, const char* argv[]) {
 
-   if (argc != 5) {
-      fputs("./rewrite pid filename addr to\n", stderr);
+   if (argc != 6) {
+      fputs("./rewrite pid filename addr to reloc\n", stderr);
       return 1;
    }
    pid_t target_pid;
@@ -196,6 +213,7 @@ int main(int argc, const char* argv[]) {
    void* addr = (void*)strtoll(argv[3], NULL, 0);
 // data
    void* to = (void*)strtoll(argv[4], NULL, 0);
+   const char* reloc = argv[5];
 
    if (ptrace(PTRACE_ATTACH, target_pid, NULL, NULL) < 0) {
       perror("ptrace attach");
@@ -205,9 +223,9 @@ int main(int argc, const char* argv[]) {
    wait(NULL);
 
    read_file(target_pid, fname);
-   rewrite_got(target_pid);
+   rewrite_got(target_pid, reloc);
    
-   rewrite_func(target_pid, addr, load_addr + to);
+   rewrite_func(target_pid, base_addr + addr, load_addr + to);
 
    if (ptrace(PTRACE_CONT, target_pid, NULL, NULL) < 0) {
       perror("ptrace continue (restore)");
